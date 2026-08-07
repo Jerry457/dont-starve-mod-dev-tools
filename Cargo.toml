@@ -1,0 +1,17 @@
+[package]
+name = "dont-starve-ui-dev-tools"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+gpui = { git = "https://github.com/zed-industries/zed", features = [
+    "inspector",
+] }
+gpui-component = { git = "https://github.com/longbridge/gpui-component", features = [
+    "inspector",
+] }
+gpui_platform = { git = "https://github.com/zed-industries/zed", features = [
+    "font-kit",
+    "wayland",
+    "x11",
+] }
