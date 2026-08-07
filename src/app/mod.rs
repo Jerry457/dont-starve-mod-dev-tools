@@ -1,18 +1,22 @@
-use gpui::{Context, IntoElement, Render, Window, div};
-use gpui_component::ToggleInspector;
+use crate::app::components::tab::Tab;
+use gpui::{AppContext, Context, Entity, IntoElement, Render, Window};
 
-mod widget_tree;
+mod components;
 
-#[derive(Default)]
-pub struct Root {}
+pub struct Root {
+    tab_view: Entity<Tab>,
+}
 
-impl Root {}
+impl Root {
+    pub fn new(context: &mut Context<Self>) -> Self {
+        Self {
+            tab_view: context.new(|context| Tab::new(context, vec!["Widgets", "Console"], 96.0)),
+        }
+    }
+}
 
 impl Render for Root {
-    fn render(&mut self, _: &mut Window, context: &mut Context<Self>) -> impl IntoElement {
-        #[cfg(debug_assertions)]
-        context.bind_keys([gpui::KeyBinding::new("F12", ToggleInspector, None)]);
-
-        div()
+    fn render(&mut self, _window: &mut Window, _context: &mut Context<Self>) -> impl IntoElement {
+        self.tab_view.clone()
     }
 }
