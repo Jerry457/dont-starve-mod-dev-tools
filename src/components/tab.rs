@@ -46,24 +46,28 @@ impl TabBar {
 
     fn under_line(&self, context: &mut Context<Self>) -> Div {
         div()
-            .h_0p5()
+            .h(px(2.0))
             .w(px(self.tab_width))
             .absolute()
             .bottom_0()
-            .bg(context.theme().progress_bar)
+            .bg(context.theme().tab_active_foreground)
     }
 
     fn bar(context: &mut Context<Self>) -> Div {
+        let theme = context.theme();
         div()
             .flex()
             .items_center()
             .h_8()
-            .border_b_0()
-            .border_color(context.theme().border)
             .relative()
+            .bg(theme.tab_bar)
+            .border_b_1()
+            .border_color(theme.border)
     }
 
     fn tab_title(&self, context: &mut Context<Self>, label: String, index: usize) -> Stateful<Div> {
+        let theme = context.theme();
+        let selected = self.selected_index == index;
         div()
             .id(label.to_string())
             // style
@@ -76,8 +80,16 @@ impl TabBar {
             .cursor_pointer()
             .border_b_2()
             .text_xs()
-            .hover(|style| style.bg(context.theme().button_hover))
-            .active(|style| style.bg(context.theme().button_active))
+            .hover(|style| {
+                style
+                    .bg(theme.button_hover)
+                    .text_color(theme.tab_active_foreground)
+            })
+            .active(|style| style.bg(theme.button_active))
+            .text_color(match selected {
+                true => theme.tab_active_foreground,
+                false => theme.tab_foreground,
+            })
             // children
             .child(label)
             // events

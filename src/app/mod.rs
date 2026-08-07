@@ -1,7 +1,6 @@
-use crate::app::components::tab::Tab;
 use gpui::{AppContext, Context, Entity, IntoElement, Render, Window};
 
-mod components;
+use crate::components::tab::Tab;
 
 pub struct Root {
     tab_view: Entity<Tab>,
