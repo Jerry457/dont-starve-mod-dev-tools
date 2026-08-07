@@ -6,7 +6,7 @@ use gpui_component_assets::Assets;
 #[cfg(debug_assertions)]
 use gpui_component::ToggleInspector;
 
-mod app;
+mod tools;
 mod components;
 
 fn main() {
@@ -25,7 +25,7 @@ fn main() {
                             ..Default::default()
                         },
                         |window, app| {
-                            let root_view = app.new(|context| app::Root::new(context));
+                            let root_view = app.new(|context| tools::Root::new(context));
                             app.new(|context| {
                                 #[cfg(debug_assertions)]
                                 context.bind_keys([KeyBinding::new("F12", ToggleInspector, None)]);
