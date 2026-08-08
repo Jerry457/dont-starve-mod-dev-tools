@@ -1,25 +1,19 @@
-use std::collections::HashMap;
-
 use anyhow::{Context, Ok};
-use axum::{Json, Router, http::StatusCode, routing::post};
+use axum::{Json, Router, extract::State, http::StatusCode, routing::post};
 use serde::{Deserialize, Serialize};
+use std::sync::Arc;
 
-#[derive(Debug, Serialize, Deserialize)]
-struct WidgetNode {
-    id: u32,
-    parent_id: Option<u32>,
-}
+use crate::{app_state::AppState, ui::inspector::{WidgetNodeMap}};
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct SyncPayload {
-    widget_nodes: HashMap<u32, WidgetNode>,
+    widget_nodes: WidgetNodeMap,
 }
 
-async fn sync(Json(payload): Json<SyncPayload>) -> StatusCode {
-    println!("成功接收到同步数据:");
-
-    for (id, node) in &payload.widget_nodes {
-        println!("Widget ID: {}, Parent ID: {:?}", id, node.parent_id);
+async fn sync(State(state): State<AppState>, Json(payload): Json<SyncPayload>) -> StatusCode {
+    state.widget_nodes.store(Arc::new(payload.widget_nodes));
+    if let Err(e) = state.sender.send(()) {
+        log::error!("Failed to sync widgets : {e}")
     }
 
     StatusCode::OK
@@ -28,8 +22,11 @@ async fn sync(Json(payload): Json<SyncPayload>) -> StatusCode {
 pub async fn serve(
     addr: &str,
     shutdown_receiver: tokio::sync::oneshot::Receiver<()>,
+    app_state: AppState,
 ) -> anyhow::Result<()> {
-    let router = Router::new().route("/sync", post(sync));
+    let router = Router::new()
+        .route("/sync", post(sync))
+        .with_state(app_state);
 
     let listener = tokio::net::TcpListener::bind(addr)
         .await

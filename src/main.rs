@@ -1,4 +1,4 @@
-use gpui::{App, AppContext, Bounds, WindowBounds, WindowOptions, px, size};
+use gpui::{App, AppContext, BorrowAppContext, Bounds, WindowBounds, WindowOptions, px, size};
 use gpui_component_assets::Assets;
 
 #[cfg(debug_assertions)]
@@ -7,6 +7,7 @@ use gpui::KeyBinding;
 #[cfg(debug_assertions)]
 use gpui_component::ToggleInspector;
 
+mod app_state;
 mod logger;
 mod server;
 mod ui;
@@ -14,15 +15,21 @@ mod ui;
 const ADDRESS: &str = "127.0.0.1:45754";
 
 fn main() -> anyhow::Result<()> {
-    logger::start()?;
+    logger::init()?;
 
+    let (sender, mut receiver) = tokio::sync::mpsc::unbounded_channel::<()>();
+    let app_state = app_state::AppState::new(sender);
+
+    let server_app_state = app_state.clone();
     let (_serde_jsonshutdown_sender, shutdown_receiver) = tokio::sync::oneshot::channel::<()>();
     std::thread::spawn(move || {
         let runtime = tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
             .expect("create Tokio runtime");
-        if let Err(error) = runtime.block_on(server::serve(ADDRESS, shutdown_receiver)) {
+        if let Err(error) =
+            runtime.block_on(server::serve(ADDRESS, shutdown_receiver, server_app_state))
+        {
             log::error!("HTTP service stopped: {error}");
         }
     });
@@ -43,6 +50,8 @@ fn main() -> anyhow::Result<()> {
             app.spawn(async move |async_app| {
                 async_app
                     .open_window(options, |window, app| {
+                        app.set_global(app_state.clone());
+
                         let root_view = app.new(|context| ui::Root::new(context));
                         app.new(|context| {
                             #[cfg(debug_assertions)]
@@ -52,6 +61,13 @@ fn main() -> anyhow::Result<()> {
                         })
                     })
                     .expect("Failed to open window");
+
+                while let Some(()) = receiver.recv().await {
+                    async_app.update(|app| {
+                        // 触发 AppState 改变事件
+                        app.update_global::<app_state::AppState, _>(|_app_state, _app| {});
+                    });
+                }
             })
             .detach();
         });

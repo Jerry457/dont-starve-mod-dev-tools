@@ -1,84 +1,130 @@
-use gpui::{Context, Entity, IntoElement, ParentElement, Render, Styled, Window, div};
-use gpui_component::{list::ListItem, resizable::{h_resizable, resizable_panel}, tree::{TreeItem, TreeState, tree}, v_flex};
+use gpui::{
+    AppContext, Context, Entity, IntoElement, ParentElement, Render, SharedString, Styled, Window,
+    px,
+};
+use gpui_component::{
+    h_flex,
+    list::ListItem,
+    resizable::{h_resizable, resizable_panel},
+    tree::{TreeItem, TreeState, tree},
+};
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
-struct SearchableTree {
+use crate::app_state::AppState;
+
+#[derive(Debug, Serialize, Deserialize)]
+pub struct WidgetNode {
+    id: SharedString,
+    parent_id: Option<SharedString>,
+}
+
+pub type WidgetNodeMap = FxHashMap<SharedString, WidgetNode>;
+
+struct WidgetTree {
     tree_state: Entity<TreeState>,
-    original_items: Vec<TreeItem>,
-    search_query: String,
 }
 
-impl SearchableTree {
-    fn filter_tree(&mut self, query: &str, cx: &mut Context<Self>) {
-        self.search_query = query.to_string();
+impl WidgetTree {
+    pub fn new(context: &mut Context<Self>) -> Self {
+        context
+            .observe_global::<AppState>(WidgetTree::update_tree)
+            .detach();
 
-        let filtered_items = if query.is_empty() {
-            self.original_items.clone()
-        } else {
-            filter_tree_items(&self.original_items, query)
-        };
+        Self {
+            tree_state: context.new(|context| TreeState::new(context).items(Vec::new())),
+        }
+    }
 
-        self.tree_state.update(cx, |state, cx| {
-            state.set_items(filtered_items, cx);
+    fn update_tree(this: &mut Self, context: &mut Context<Self>) {
+        let app_state = context.global::<AppState>();
+
+        let nodes_guard = app_state.widget_nodes.load();
+
+        let new_items = Self::build_tree_items(&nodes_guard);
+
+        this.tree_state.update(context, |tree_state, context| {
+            tree_state.set_items(new_items, context)
         });
+
+        context.notify();
     }
-}
 
-impl Render for SearchableTree {
-    fn render(&mut self, _window: &mut Window, context: &mut Context<Self>) -> impl IntoElement {
-        let tree_state = self.tree_state.clone();
+    fn build_tree_item(
+        widget_node: &WidgetNode,
+        parent_to_children: &FxHashMap<Option<SharedString>, Vec<&WidgetNode>>,
+    ) -> TreeItem {
+        let mut item = TreeItem::new(widget_node.id.clone(), widget_node.id.clone()).expanded(true);
 
-        v_flex()
-            .size_full()
-            .gap_2()
-            // .child(
-            //     // 搜索输入框示例（根据您使用的具体输入框组件进行绑定）
-            //     // 需在 text_change / on_input 回调中调用 self.filter_tree(value, cx)
-            //     /* text_input_component */
-            // )
-            .child(
-                // 渲染过滤后的树
-                tree(&tree_state, |ix, entry, selected, _window, _cx| {
-                    ListItem::new(ix)
-                        .selected(selected)
-                        .child(entry.item().label.clone())
-                })
-            )
-    }
-}
-
-fn filter_tree_items(items: &[TreeItem], query: &str) -> Vec<TreeItem> {
-    items.iter()
-        .filter_map(|item| {
-            if item.label.to_lowercase().contains(&query.to_lowercase()) {
-                Some(item.clone().expanded(true)) // Auto-expand matches
-            } else {
-                // Check if any children match
-                let filtered_children = filter_tree_items(&item.children, query);
-                if !filtered_children.is_empty() {
-                    Some(item.clone()
-                        .children(filtered_children)
-                        .expanded(true))
-                } else {
-                    None
-                }
+        let current_id_key = Some(widget_node.id.clone());
+        if let Some(children) = parent_to_children.get(&current_id_key) {
+            let mut child_items = Vec::with_capacity(children.len());
+            for child in children {
+                child_items.push(Self::build_tree_item(child, parent_to_children));
             }
-        })
-        .collect()
+            item = item.children(child_items);
+        }
+        item
+    }
+
+    fn build_tree_items(widget_nodes: &WidgetNodeMap) -> Vec<TreeItem> {
+        let len = widget_nodes.len();
+        if len == 0 {
+            return Vec::new();
+        }
+
+        // <Option<parent_id>, Vec<child>>
+        let mut parent_to_children: FxHashMap<Option<SharedString>, Vec<&WidgetNode>> =
+            FxHashMap::with_capacity_and_hasher(len, Default::default());
+
+        let mut roots = Vec::with_capacity(len);
+
+        for node in widget_nodes.values() {
+            parent_to_children
+                .entry(node.parent_id.clone())
+                .or_insert_with(|| Vec::with_capacity(4))
+                .push(node);
+
+            let is_root = match &node.parent_id {
+                Some(parent_id) => !widget_nodes.contains_key(parent_id),
+                None => true,
+            };
+            if is_root {
+                roots.push(node);
+            }
+        }
+
+        let mut root_items = Vec::with_capacity(roots.len());
+        for root in roots {
+            root_items.push(Self::build_tree_item(root, &parent_to_children));
+        }
+
+        root_items
+    }
 }
 
+impl Render for WidgetTree {
+    fn render(&mut self, _window: &mut Window, _context: &mut Context<Self>) -> impl IntoElement {
+        tree(
+            &self.tree_state,
+            |index, tree_entry, selected, _window, _context| {
+                ListItem::new(index)
+                    .selected(selected)
+                    .pl(px(16.) * tree_entry.depth() as f32 + px(12.))
+                    .child(h_flex().gap_2().child(tree_entry.item().label.clone()))
+            },
+        )
+    }
+}
 
 pub struct Inspector {
-    // widget_tree: Entity<SearchableTree>,
+    widget_tree: Entity<WidgetTree>,
 }
 
 impl Inspector {
-    pub fn new(_context: &mut Context<Self>) -> Self {
+    pub fn new(context: &mut Context<Self>) -> Self {
         Self {
-            // widget_tree: SearchableTree{
-            //     tree_state: todo!(),
-            //     original_items: [],
-            //     search_query: "",
-            // }
+            widget_tree: context.new(|context| WidgetTree::new(context)),
         }
     }
 }
@@ -86,7 +132,7 @@ impl Inspector {
 impl Render for Inspector {
     fn render(&mut self, _window: &mut Window, _context: &mut Context<Self>) -> impl IntoElement {
         h_resizable("inspector")
-            // .child(resizable_panel().child(SearchableTree))
-            .child(div().into_any_element())
+            .child(resizable_panel())
+            .child(self.widget_tree.clone().into_any_element())
     }
 }

@@ -1,13 +1,13 @@
 use gpui::{AppContext, Context, Entity, IntoElement, Render, Window};
 use gpui_component::IconName;
 
-use crate::{
-    ui::components::tab::{Tab, TabConfig, TabTitleConfig},
-    ui::inspector::Inspector,
+use crate::ui::{
+    components::tab::{Tab, TabConfig, TabTitleConfig},
+    inspector::Inspector,
 };
 
 mod components;
-mod inspector;
+pub mod inspector;
 
 pub struct Root {
     tab_view: Entity<Tab>,
