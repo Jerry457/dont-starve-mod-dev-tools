@@ -2,10 +2,11 @@ use gpui::{AppContext, Context, Entity, IntoElement, Render, Window};
 use gpui_component::IconName;
 
 use crate::{
-    components::tab::{Tab, TabConfig, TabTitleConfig},
-    tools::inspector::Inspector,
+    ui::components::tab::{Tab, TabConfig, TabTitleConfig},
+    ui::inspector::Inspector,
 };
 
+mod components;
 mod inspector;
 
 pub struct Root {

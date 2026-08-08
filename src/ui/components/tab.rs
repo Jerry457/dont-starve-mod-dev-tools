@@ -15,7 +15,7 @@ pub struct TabConfig {
 }
 
 pub enum TabBarEvent {
-    TabSelected(usize), // 携带被选中的索引
+    TabSelected(usize),
 }
 
 pub struct TabBar {
